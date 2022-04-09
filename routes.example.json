@@ -1,0 +1,24 @@
+[
+  {
+    "name": "House — work",
+    "start": {
+      "latitude": 50.0465230093882,
+      "longitude": 80.92797799222171
+    },
+    "finish": {
+      "latitude": 40.0826158713582,
+      "longitude": 40.9386886395514
+    }
+  },
+  {
+    "name": "Work — house",
+    "start": {
+      "latitude": 40.0826158713582,
+      "longitude": 40.9386886395514
+    },
+    "finish": {
+      "latitude": 50.0465230093882,
+      "longitude": 80.92797799222171
+    }
+  }
+]

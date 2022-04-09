@@ -1,0 +1,23 @@
+apiVersion: 1
+
+datasources:
+  - name: InfluxDB
+    type: influxdb
+    typeName: InfluxDB
+    typeLogoUrl: public/app/plugins/datasource/influxdb/img/influxdb_logo.svg
+    orgId: 1
+    access: proxy
+    url: http://influxdb:8086
+    basicAuth: false
+    isDefault: true
+    version: 1
+    editable: true
+    readOnly: false
+    secureJsonData:
+      token: raccoon-very-secret-token
+    jsonData:
+      defaultBucket: raccoon
+      httpHeaderName1: Authorization
+      httpMode: POST
+      organization: raccoon
+      version: Flux

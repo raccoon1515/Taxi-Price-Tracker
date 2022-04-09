@@ -1,0 +1,162 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.set_version.outputs.version }}
+      jar_path: ${{ steps.set_artifact_outputs.outputs.jar_path }}
+      jar_name: ${{ steps.set_artifact_outputs.outputs.jar_name }}
+      native_image_path: ${{ steps.set_artifact_outputs.outputs.native_image_path }}
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up JDK 11
+        uses: actions/setup-java@v3
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+
+      - name: Set version
+        id: set_version
+        run: echo "::set-output name=version::$(git describe --tags --abbrev=0 | cut -c 2-)"
+
+      - uses: graalvm/setup-graalvm@v1
+        with:
+          version: '22.1.0'
+          java-version: '11'
+          components: 'native-image'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build jar
+        uses: gradle/gradle-build-action@0d13054264b0bb894ded474f08ebb30921341cee
+        with:
+          arguments: build -Pversion=${{ steps.set_version.outputs.version }}
+
+      - name: Build native image
+        uses: gradle/gradle-build-action@0d13054264b0bb894ded474f08ebb30921341cee
+        with:
+          arguments: nativeCompile -Pversion=${{ steps.set_version.outputs.version }}
+
+      - id: set_artifact_outputs
+        run: |
+          echo "::set-output name=jar_path::$(find build/libs/*)"
+          echo "::set-output name=jar_name::$(basename $(find build/libs/*))"
+          echo "::set-output name=native_image_path::build/native/nativeCompile/TaxiPriceTracker"
+
+      - uses: actions/cache@v3
+        with:
+          key: ${{ steps.set_artifact_outputs.outputs.jar_name }}
+          path: ${{ steps.set_artifact_outputs.outputs.jar_path }}
+
+      - uses: actions/cache@v3
+        with:
+          key: TaxiPriceTracker-${{ steps.set_version.outputs.version }}
+          path: ${{ steps.set_artifact_outputs.outputs.native_image_path }}
+
+  create-release:
+    runs-on: ubuntu-latest
+    needs: build
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+    steps:
+      - name: Create release
+        uses: actions/create-release@v1
+        id: create_release
+        with:
+          draft: false
+          prerelease: false
+          release_name: ${{ needs.build.outputs.version }}
+          tag_name: ${{ github.ref }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+  upload-assets:
+    runs-on: ubuntu-latest
+    needs:
+      - build
+      - create-release
+    steps:
+      - uses: actions/cache@v3
+        with:
+          key: ${{ needs.build.outputs.jar_name }}
+          path: ${{ needs.build.outputs.jar_path }}
+
+      - uses: actions/cache@v3
+        with:
+          key: TaxiPriceTracker-${{ needs.build.outputs.version }}
+          path: ${{ needs.build.outputs.native_image_path }}
+
+      - name: Upload jar release asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ${{ needs.build.outputs.jar_path }}
+          asset_name: ${{ needs.build.outputs.jar_name }}
+          asset_content_type: application/jar
+
+      - name: Upload native image release asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ${{ needs.build.outputs.native_image_path }}
+          asset_name: TaxiPriceTracker-${{ needs.build.outputs.version }}
+          asset_content_type: application/binary
+
+  push-docker-image:
+    runs-on: ubuntu-latest
+    needs:
+      - build
+    steps:
+      - uses: actions/cache@v3
+        with:
+          key: TaxiPriceTracker-${{ needs.build.outputs.version }}
+          path: ${{ needs.build.outputs.native_image_path }}
+
+      - uses: docker/setup-qemu-action@v1
+
+      - uses: docker/setup-buildx-action@v1
+
+      - uses: docker/login-action@v1
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate dockerfile
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+          REVISION: ${{ github.sha }}
+          URL: ${{ github.event.repository.html_url }}
+        run: |
+          echo 'FROM gcr.io/distroless/base' > Dockerfile
+          echo 'LABEL org.opencontainers.image.authors=raccoon1515' >> Dockerfile
+          echo 'LABEL org.opencontainers.image.title="Taxi-price-tracker"' >> Dockerfile
+          echo "LABEL org.opencontainers.image.url=$URL" >> Dockerfile
+          echo "LABEL org.opencontainers.image.source=$URL" >> Dockerfile
+          echo "LABEL org.opencontainers.image.version=$VERSION" >> Dockerfile
+          echo "LABEL org.opencontainers.image.revision=$REVISION" >> Dockerfile
+          echo "LABEL org.opencontainers.image.created=\"$(date)\"" >> Dockerfile
+          echo 'WORKDIR tpt' >> Dockerfile
+          echo "COPY build/native/nativeCompile/TaxiPriceTracker ." >> Dockerfile
+          echo 'ENTRYPOINT ["/tpt/TaxiPriceTracker"]' >> Dockerfile
+
+      - name: Docker build and push
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/tpt:${{ needs.build.outputs.version }}
+            ghcr.io/${{ github.repository_owner }}/tpt:latest

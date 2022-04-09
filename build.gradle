@@ -1,0 +1,81 @@
+import java.time.Instant
+
+plugins {
+    id 'org.jetbrains.kotlin.jvm' version '1.6.21'
+    id 'application'
+    id 'io.github.raccoon1515.sourcecrypt' version '1.0'
+    id 'idea'
+    id 'com.google.cloud.tools.jib' version '3.2.1'
+    id 'org.graalvm.buildtools.native' version '0.9.11'
+}
+
+group = 'net.raccoon.tpt'
+version = getProperty('version')
+
+dependencies {
+    implementation(
+            'org.jetbrains.kotlin:kotlin-stdlib',
+            'com.influxdb:influxdb-client-kotlin:6.0.0',
+            'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.1',
+            'org.jetbrains.kotlinx:kotlinx-coroutines-jdk8:1.6.1'
+    )
+}
+
+compileKotlin {
+    kotlinOptions.jvmTarget = '11'
+}
+compileTestKotlin {
+    kotlinOptions.jvmTarget = '11'
+}
+sourceCompatibility = '11'
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+application {
+    mainClassName = 'net.raccoon.tpt.ApplicationContextKt'
+}
+
+jib {
+    from {
+        image = 'openjdk:17-alpine3.14'
+    }
+    to {
+        image = "raccoon.net/taxi-price-tracker:$version"
+    }
+    container {
+        creationTime = 'USE_CURRENT_TIMESTAMP'
+        environment = [
+                'VERSION': version,
+        ]
+        labels = [
+                'org.opencontainers.image.created': "${Date.from(Instant.now())}",
+                'org.opencontainers.image.version': version as String,
+        ]
+        user = 'nobody'
+    }
+}
+
+nativeBuild {
+    fallback = false
+    /*
+    Fully static
+    buildArgs.add('--static')
+    buildArgs.add('--libc=bundle/')
+    */
+    // Mostly static
+    buildArgs.add('-H:+StaticExecutableWithDynamicLibC')
+    buildArgs.add('--allow-incomplete-classpath')
+    resources {
+        autodetect()
+    }
+    configurationFileDirectories.from(file('native-build/config'))
+}
+
+idea {
+    module {
+        generatedSourceDirs += file('build/generated')
+    }
+}

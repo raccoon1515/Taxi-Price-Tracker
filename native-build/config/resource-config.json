@@ -1,0 +1,24 @@
+{
+  "resources":{
+  "includes":[
+    {
+      "pattern":"\\Qcitymobil/api.url\\E"
+    }, 
+    {
+      "pattern":"\\Qcitymobil/body.json\\E"
+    }, 
+    {
+      "pattern":"\\Qcitymobil/headers.json\\E"
+    }, 
+    {
+      "pattern":"\\Quber/api.url\\E"
+    }, 
+    {
+      "pattern":"\\Quber/body.json\\E"
+    }, 
+    {
+      "pattern":"\\Quber/headers.json\\E"
+    }
+  ]},
+  "bundles":[]
+}

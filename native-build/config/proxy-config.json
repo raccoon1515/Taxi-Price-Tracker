@@ -1,0 +1,11 @@
+[
+  {
+    "interfaces":["com.influxdb.client.service.HealthService"]}
+  ,
+  {
+    "interfaces":["com.influxdb.client.service.PingService"]}
+  ,
+  {
+    "interfaces":["com.influxdb.client.service.WriteService"]}
+  
+]

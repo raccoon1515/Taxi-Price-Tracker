@@ -1,0 +1,63 @@
+version: "3.7"
+services:
+  tracker:
+    image: ghcr.io/raccoon1515/tpt:1.0
+#    restart: unless-stopped
+    volumes:
+      - ../routes.example.json:/etc/taxi-price-tracker/routes.json
+    environment:
+      - TZ=${TZ}
+      - INFLUXDB_URL=${INFLUXDB_URL}
+      - INFLUXDB_ORG=${INFLUXDB_ORG}
+      - INFLUXDB_BUCKET=${INFLUXDB_BUCKET}
+      - INFLUXDB_TOKEN=${INFLUXDB_TOKEN}
+      - APP_RETRIEVE_INTERVAL=${APP_RETRIEVE_INTERVAL}
+      - ROUTES_PATH=${ROUTES_PATH}
+      - DECRYPT_SALT=${DECRYPT_SALT}
+      - DECRYPT_SECRET=${DECRYPT_SECRET}
+    entrypoint: /tpt/TaxiPriceTracker
+    depends_on:
+      influxdb:
+        condition: service_healthy
+
+  influxdb:
+    image: influxdb:alpine
+    restart: unless-stopped
+#    ports:
+#      - '8086:8086'
+    volumes:
+      - influxdb-storage:/var/lib/influxdb2
+#      - influxdb-config:/etc/influxdb2
+    environment:
+      - TZ=${TZ}
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=${INFLUXDB_USERNAME}
+      - DOCKER_INFLUXDB_INIT_PASSWORD=${INFLUXDB_PASSWORD}
+      - DOCKER_INFLUXDB_INIT_ORG=${INFLUXDB_ORG}
+      - DOCKER_INFLUXDB_INIT_BUCKET=${INFLUXDB_BUCKET}
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUXDB_TOKEN}
+      - INFLUXDB_HTTP_AUTH_ENABLED=true
+    healthcheck:
+      test: "wget -O- --no-verbose --tries=1  http://localhost:8086/ping"
+      interval: 5s
+      timeout: 10s
+      retries: 5
+
+  grafana:
+    image: grafana/grafana:latest
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    volumes:
+      - grafana-storage:/var/lib/grafana
+      - ./grafana-provisioning/:/etc/grafana/provisioning
+    depends_on:
+      - influxdb
+    environment:
+      - TZ=${TZ}
+      - GF_SECURITY_ADMIN_USER=${GF_SECURITY_ADMIN_USER}
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD}
+
+volumes:
+  influxdb-storage:
+  grafana-storage:
